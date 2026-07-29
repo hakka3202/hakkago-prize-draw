@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HakkaGO 獎項抽籤工具</title>
+  <meta name="description" content="匯入 HakkaGO 每月積分排行榜，公平隨機分配獎項。Excel 僅在瀏覽器本機處理。">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root{--primary:#08777b;--dark:#183a3c;--pale:#e9f6f5;--bg:#f4f8f7;--yellow:#f4b942;--coral:#ef7f6d;--white:#fff;--line:#d6e5e3;--muted:#5b7273;--danger:#b42318}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--dark);font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;line-height:1.6}
+    header{padding:42px 20px;background:linear-gradient(135deg,#075f63,#0b8a8f);color:#fff}
+    .wrap{width:min(1080px,calc(100% - 32px));margin:auto}
+    .eyebrow{font-weight:700;opacity:.88;letter-spacing:.04em}
+    h1{margin:.2rem 0;font-size:clamp(2rem,5vw,3.3rem);line-height:1.2}
+    header p{margin:.6rem 0 0;font-size:1.05rem}
+    .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:24px auto}
+    .step{background:#dbe8e6;color:#55706f;border-radius:999px;text-align:center;padding:8px;font-weight:700}
+    .step.active{background:var(--primary);color:#fff}
+    .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px;margin:18px 0;box-shadow:0 8px 28px rgba(24,58,60,.06)}
+    h2{margin:0 0 14px;font-size:1.35rem}
+    .drop{display:block;border:2px dashed #83bab8;border-radius:15px;background:var(--pale);padding:34px 18px;text-align:center;cursor:pointer}
+    .drop:hover,.drop.drag{border-color:var(--primary);background:#dff2f0}
+    .drop strong{display:block;font-size:1.16rem}
+    input[type=file]{display:none}
+    .privacy{margin-top:12px;color:var(--primary);font-weight:700}
+    .rule-callout{background:var(--dark);color:#fff;border-radius:14px;padding:16px 18px;margin:18px 0}
+    .rule-callout strong{color:#ffe08a;font-size:1.1em}
+    .rule-callout p{margin:0}
+    .rule-callout p+p{margin-top:5px;opacity:.92;font-size:.94rem}
+    .message{display:none;margin:14px 0 0;padding:12px 14px;border-radius:10px}
+    .message.show{display:block}
+    .message.error{color:var(--danger);background:#fef3f2}
+    .message.warn{color:#7a4e00;background:#fff8e6}
+    .message.ok{color:#086c45;background:#eaf8f1}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+    .stat{background:var(--pale);border-radius:13px;padding:15px}
+    .stat span{display:block;color:var(--muted);font-size:.9rem}
+    .stat b{font-size:1.2rem}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}
+    table{width:100%;border-collapse:collapse;min-width:600px}
+    th,td{padding:11px 13px;text-align:left;border-bottom:1px solid var(--line)}
+    th{background:#edf7f6}
+    tr:last-child td{border-bottom:0}
+    .prizes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+    .prize{border:1px solid var(--line);border-top:6px solid var(--primary);border-radius:13px;padding:16px}
+    .prize:nth-child(2){border-top-color:var(--yellow)}
+    .prize:nth-child(3){border-top-color:var(--coral)}
+    .prize label{display:block;font-weight:700;min-height:52px}
+    input[type=number]{width:100%;padding:10px;border:1px solid #a9c3c1;border-radius:9px;font-size:1rem}
+    select{width:100%;padding:11px;border:1px solid #a9c3c1;border-radius:9px;background:#fff;font-size:1rem;color:var(--dark)}
+    .month-setting{max-width:360px;margin:0 0 16px}
+    .month-setting label{display:block;margin-bottom:6px;font-weight:700}
+    details{margin-top:18px;border:1px solid var(--line);border-radius:12px;background:#fbfdfc}
+    summary{cursor:pointer;padding:12px 14px;font-weight:700;color:var(--primary)}
+    details .table-wrap{border:0;border-top:1px solid var(--line);border-radius:0}
+    .count-note{margin:14px 0;font-weight:700}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+    button{border:0;border-radius:10px;padding:11px 18px;font-size:1rem;font-weight:700;cursor:pointer}
+    button.primary{background:var(--primary);color:#fff}
+    button.secondary{background:#e5efee;color:var(--dark)}
+    button.record{background:#b42318;color:#fff}
+    button:disabled{opacity:.45;cursor:not-allowed}
+    .recording-panel{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    .recording-status{display:flex;align-items:center;gap:9px;font-weight:700}
+    .record-dot{width:11px;height:11px;border-radius:50%;background:#9aabaa}
+    .record-dot.live{background:#d92d20;box-shadow:0 0 0 5px rgba(217,45,32,.14);animation:pulse 1.2s infinite}
+    @keyframes pulse{50%{opacity:.45}}
+    .result-meta{background:var(--pale);border-radius:12px;padding:12px 14px;margin-bottom:16px;overflow-wrap:anywhere}
+    .result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .result-box{border:1px solid var(--line);border-radius:14px;padding:16px}
+    .result-box h3{margin:0 0 10px;font-size:1rem}
+    .winner{background:#f7faf9;border-radius:9px;padding:9px 11px;margin:8px 0}
+    .winner b{display:block}
+    [hidden]{display:none!important}
+    footer{text-align:center;color:var(--muted);padding:28px 16px 38px}
+    @media(max-width:760px){.steps,.summary,.prizes,.result-grid{grid-template-columns:1fr}.step{border-radius:10px}.card{padding:18px}.prize label{min-height:0}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="eyebrow">哈客網路學院 · HakkaGO 遊戲挑戰賽</div>
+      <h1>獎項抽籤工具</h1>
+      <p>匯入 HakkaGO「<strong>個人每月積分排行榜</strong>」前 10 名，依 115～117 年禮品規劃公平分配獎項。</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="steps" aria-label="操作步驟">
+      <div class="step active" id="step1">1. 匯入名單</div>
+      <div class="step" id="step2">2. 分配獎項</div>
+      <div class="step" id="step3">3. 匯出結果</div>
+    </div>
+
+    <section class="rule-callout" aria-label="活動抽獎規則">
+      <p>每月依 HakkaGO「<strong>個人每月積分排行榜</strong>」選出前 10 名玩家；同分時，從同分玩家中抽出得獎者。</p>
+      <p>請先確認後臺最終排行榜與同分抽籤結果，再匯入確定得獎的前 10 名名單。</p>
+    </section>
+
+    <section class="card">
+      <h2>開始前先錄影</h2>
+      <div class="recording-panel">
+        <div>
+          <div class="recording-status"><span class="record-dot" id="recordDot"></span><span id="recordStatus">尚未開始錄影</span></div>
+          <small>請先按「開始錄影」並選擇「目前分頁」，再匯入 Excel。停止後會自動下載 WebM 影片，影片不會上傳。</small>
+        </div>
+        <div class="actions">
+          <button class="record" id="recordBtn">開始錄影</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>STEP 1｜匯入「個人每月積分排行榜」Excel</h2>
+      <label class="drop" id="dropZone">
+        <input id="fileInput" type="file" accept=".xlsx,.xls">
+        <strong>選擇 Excel 名單，或將檔案拖曳到這裡</strong>
+        <span>支援 .xlsx 與 .xls</span>
+      </label>
+      <div class="privacy">🔒 資料不上傳，Excel 僅在此瀏覽器中處理。</div>
+      <div class="message" id="importMessage" role="status"></div>
+    </section>
+
+    <section class="card" id="listCard" hidden>
+      <h2>STEP 2｜確認名單</h2>
+      <div class="summary">
+        <div class="stat"><span>有效名單</span><b id="playerCount">0 名玩家</b></div>
+        <div class="stat"><span>獎項名額</span><b id="prizeCount">10 名</b></div>
+        <div class="stat"><span>積分狀態</span><b id="scoreStatus">—</b></div>
+      </div>
+      <div class="message" id="listWarning"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>名次</th><th>姓名</th><th>帳號</th><th>當月積分</th></tr></thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="prizeCard" hidden>
+      <h2>STEP 3｜設定並分配獎項</h2>
+      <div class="month-setting">
+        <label for="drawMonth">抽獎月份</label>
+        <select id="drawMonth" aria-label="選擇抽獎月份"></select>
+      </div>
+      <div class="prizes">
+        <div class="prize"><label for="p1">客製化 IP 人物鑰匙圈</label><input id="p1" type="number" min="0" step="1" value="5"></div>
+        <div class="prize"><label for="p2">LED 小燈箱</label><input id="p2" type="number" min="0" step="1" value="0"></div>
+        <div class="prize"><label for="p3">客製化手機夾片</label><input id="p3" type="number" min="0" step="1" value="3"></div>
+        <div class="prize"><label for="p4">客製化 iPASS 一卡通</label><input id="p4" type="number" min="0" step="1" value="2"></div>
+      </div>
+      <div class="count-note" id="countNote"></div>
+      <button class="primary" id="drawBtn" disabled>開始分配獎項</button>
+      <details>
+        <summary>查看 115/07～117/02 完整禮品規劃表</summary>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>場次</th><th>獎項月份</th><th>IP 人物鑰匙圈</th><th>LED 小燈箱</th><th>手機夾片</th><th>iPASS 一卡通</th><th>小計</th></tr></thead>
+            <tbody id="planBody"></tbody>
+            <tfoot><tr><th colspan="2">總計</th><th>100</th><th>18</th><th>60</th><th>22</th><th>200</th></tr></tfoot>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    <section class="card" id="resultCard" hidden>
+      <h2>抽籤結果</h2>
+      <div class="result-meta" id="resultMeta"></div>
+      <div class="result-grid" id="resultGrid"></div>
+      <div class="actions">
+        <button class="record" id="stopRecordBtn" disabled>停止錄影並下載影片</button>
+        <button class="primary" id="exportBtn">匯出 Excel 結果</button>
+        <button class="secondary" id="clearBtn">清除結果</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    哈客網路學院 HakkaGO 遊戲挑戰賽<br>
+    抽籤前請再次確認後臺最終排行榜及參加資格。
+  </footer>
+
+  <script>
+    const REQUIRED = ["名次", "帳號", "姓名", "當月積分"];
+    const PRIZES = [
+      { name: "客製化 IP 人物鑰匙圈", input: "p1" },
+      { name: "LED 小燈箱", input: "p2" },
+      { name: "客製化手機夾片", input: "p3" },
+      { name: "客製化 iPASS 一卡通", input: "p4" }
+    ];
+    const GIFT_PLANS = Array.from({ length: 20 }, (_, index) => {
+      const startYear = 115;
+      const startMonth = 7;
+      const absoluteMonth = startMonth - 1 + index;
+      const year = startYear + Math.floor(absoluteMonth / 12);
+      const month = absoluteMonth % 12 + 1;
+      const isEndpoint = index === 0 || index === 19;
+      return {
+        round: index + 1,
+        month: `${year}/${String(month).padStart(2, "0")}`,
+        counts: [5, isEndpoint ? 0 : 1, 3, isEndpoint ? 2 : 1]
+      };
+    });
+    let players = [];
+    let results = [];
+    let drawTime = "";
+    let batchId = "";
+    let drawing = false;
+    let mediaRecorder = null;
+    let recordingStream = null;
+    let recordingChunks = [];
+    let recordingStartedAt = 0;
+    let recordingTimer = null;
+
+    const $ = id => document.getElementById(id);
+    const fileInput = $("fileInput");
+    const dropZone = $("dropZone");
+
+    function showMessage(el, text, type) {
+      el.textContent = text;
+      el.className = `message show ${type}`;
+    }
+
+    function resetMessage(el) {
+      el.textContent = "";
+      el.className = "message";
+    }
+
+    function safeText(value) {
+      return value == null ? "" : String(value).trim();
+    }
+
+    function parseFile(file) {
+      resetMessage($("importMessage"));
+      if (!file || !/\.(xlsx|xls)$/i.test(file.name)) {
+        showMessage($("importMessage"), "請選擇 .xlsx 或 .xls 格式的 Excel 檔案。", "error");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onerror = () => showMessage($("importMessage"), "檔案讀取失敗，請重新選擇。", "error");
+      reader.onload = event => {
+        try {
+          const workbook = XLSX.read(event.target.result, { type: "array" });
+          if (!workbook.SheetNames.length) throw new Error("Excel 沒有可讀取的工作表。");
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
+          if (!rows.length) throw new Error("Excel 沒有有效資料。");
+          const headers = Object.keys(rows[0]);
+          const missing = REQUIRED.filter(h => !headers.includes(h));
+          if (missing.length) throw new Error(`缺少必要欄位：${missing.join("、")}`);
+
+          const parsed = rows.filter(row => Object.values(row).some(v => safeText(v) !== "")).map((row, index) => {
+            const rank = Number(row["名次"]);
+            const score = Number(row["當月積分"]);
+            if (!Number.isFinite(rank) || !Number.isFinite(score)) {
+              throw new Error(`第 ${index + 2} 列的「名次」或「當月積分」不是有效數字。`);
+            }
+            return {
+              rank, account: safeText(row["帳號"]), name: safeText(row["姓名"]),
+              email: safeText(row["Email"]), phone: safeText(row["電話"]), score
+            };
+          });
+          if (!parsed.length) throw new Error("Excel 沒有有效資料。");
+          if (parsed.some(p => !p.account || !p.name)) throw new Error("帳號或姓名不可空白。");
+
+          players = parsed.sort((a, b) => a.rank - b.rank);
+          results = [];
+          $("resultCard").hidden = true;
+          renderPlayers();
+          showMessage($("importMessage"), `已讀取「${file.name}」，共 ${players.length} 名玩家。`, "ok");
+        } catch (error) {
+          players = [];
+          $("listCard").hidden = true;
+          $("prizeCard").hidden = true;
+          showMessage($("importMessage"), error.message || "Excel 解析失敗，請確認格式。", "error");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderPlayers() {
+      $("listCard").hidden = false;
+      $("prizeCard").hidden = false;
+      $("playerCount").textContent = `${players.length} 名玩家`;
+      $("previewBody").replaceChildren(...players.map(p => {
+        const tr = document.createElement("tr");
+        [p.rank, p.name, p.account, p.score].forEach(value => {
+          const td = document.createElement("td");
+          td.textContent = value;
+          tr.appendChild(td);
+        });
+        return tr;
+      }));
+
+      const duplicateScores = players.some((p, i) => i > 0 && players[i - 1].score === p.score);
+      $("scoreStatus").textContent = duplicateScores ? "有同分" : "無同分";
+      const accounts = players.map(p => p.account);
+      const duplicateAccounts = new Set(accounts).size !== accounts.length;
+      if (duplicateScores || duplicateAccounts) {
+        const warnings = [];
+        if (duplicateScores) warnings.push("名單中有同分，請先確認主辦單位最終名次");
+        if (duplicateAccounts) warnings.push("名單中有重複帳號");
+        showMessage($("listWarning"), warnings.join("；") + "。", "warn");
+      } else resetMessage($("listWarning"));
+      updateCounts();
+      setStep(2);
+    }
+
+    function getCounts() {
+      return PRIZES.map(p => {
+        const value = Number($(p.input).value);
+        return Number.isInteger(value) && value >= 0 ? value : NaN;
+      });
+    }
+
+    function setupGiftPlans() {
+      const select = $("drawMonth");
+      select.replaceChildren(...GIFT_PLANS.map(plan => {
+        const option = document.createElement("option");
+        option.value = plan.month;
+        option.textContent = `${plan.month}（第 ${plan.round} 場）`;
+        return option;
+      }));
+      $("planBody").replaceChildren(...GIFT_PLANS.map(plan => {
+        const tr = document.createElement("tr");
+        [plan.round, plan.month, ...plan.counts, 10].forEach(value => {
+          const td = document.createElement("td");
+          td.textContent = value;
+          tr.appendChild(td);
+        });
+        return tr;
+      }));
+      applySelectedPlan();
+    }
+
+    function applySelectedPlan() {
+      const plan = GIFT_PLANS.find(item => item.month === $("drawMonth").value) || GIFT_PLANS[0];
+      plan.counts.forEach((count, index) => {
+        const input = $(PRIZES[index].input);
+        input.value = count;
+        input.closest(".prize").hidden = count === 0;
+      });
+      results = [];
+      drawTime = "";
+      batchId = "";
+      $("resultCard").hidden = true;
+      $("drawBtn").textContent = "開始分配獎項";
+      setStep(players.length ? 2 : 1);
+      updateCounts();
+    }
+
+    function updateCounts() {
+      const counts = getCounts();
+      const valid = counts.every(Number.isFinite);
+      const total = valid ? counts.reduce((a, b) => a + b, 0) : 0;
+      $("prizeCount").textContent = valid ? `${total} 名` : "設定錯誤";
+      if (!valid) {
+        $("countNote").textContent = "名額必須是 0 以上的整數。";
+      } else if (total === players.length) {
+        $("countNote").textContent = `名額合計 ${total} 名，設定正確。`;
+      } else {
+        const diff = players.length - total;
+        $("countNote").textContent = diff > 0 ? `尚少 ${diff} 個名額。` : `多出 ${Math.abs(diff)} 個名額。`;
+      }
+      $("drawBtn").disabled = !players.length || !valid || total !== players.length || drawing;
+    }
+
+    function secureRandomInt(maxExclusive) {
+      if (maxExclusive <= 0) return 0;
+      const limit = Math.floor(0x100000000 / maxExclusive) * maxExclusive;
+      const values = new Uint32Array(1);
+      do { crypto.getRandomValues(values); } while (values[0] >= limit);
+      return values[0] % maxExclusive;
+    }
+
+    function secureShuffle(items) {
+      const copy = [...items];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = secureRandomInt(i + 1);
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    async function draw() {
+      if ($("drawBtn").disabled || drawing) return;
+      drawing = true;
+      updateCounts();
+      $("drawBtn").textContent = "正在公平分配…";
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const shuffled = secureShuffle(players);
+      const counts = getCounts();
+      let cursor = 0;
+      results = [];
+      PRIZES.forEach((prize, prizeIndex) => {
+        shuffled.slice(cursor, cursor + counts[prizeIndex]).forEach((player, offset) => {
+          results.push({ ...player, prize: prize.name, order: cursor + offset + 1 });
+        });
+        cursor += counts[prizeIndex];
+      });
+      drawTime = new Date().toLocaleString("zh-TW", { hour12: false });
+      batchId = crypto.randomUUID ? crypto.randomUUID() :
+        "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+          const r = secureRandomInt(16); return (c === "x" ? r : (r & 3) | 8).toString(16);
+        });
+      drawing = false;
+      $("drawBtn").textContent = "重新分配獎項";
+      updateCounts();
+      renderResults();
+    }
+
+    function renderResults() {
+      $("resultCard").hidden = false;
+      $("resultMeta").textContent = `獎項月份：${$("drawMonth").value}　｜　抽籤時間：${drawTime}　｜　批次編號：${batchId}`;
+      $("resultGrid").replaceChildren(...PRIZES.map(prize => {
+        const box = document.createElement("div");
+        box.className = "result-box";
+        const h3 = document.createElement("h3");
+        const winners = results.filter(r => r.prize === prize.name).sort((a, b) => a.rank - b.rank);
+        if (!winners.length) return null;
+        h3.textContent = `${prize.name}（${winners.length} 名）`;
+        box.appendChild(h3);
+        winners.forEach(w => {
+          const div = document.createElement("div");
+          div.className = "winner";
+          const b = document.createElement("b");
+          b.textContent = `第 ${w.rank} 名｜${w.name}`;
+          const span = document.createElement("span");
+          span.textContent = `當月積分：${w.score}`;
+          div.append(b, span);
+          box.appendChild(div);
+        });
+        return box;
+      }).filter(Boolean));
+      setStep(3);
+      $("resultCard").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function exportExcel() {
+      if (!results.length) return;
+      const rows = [...results].sort((a, b) => a.rank - b.rank).map(r => ({
+        "名次": r.rank, "帳號": r.account, "姓名": r.name, "Email": r.email,
+        "電話": r.phone, "當月積分": r.score, "獎項月份": $("drawMonth").value,
+        "獎項": r.prize, "抽籤順序": r.order,
+        "抽籤時間": drawTime, "抽籤批次編號": batchId
+      }));
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      sheet["!cols"] = [{wch:8},{wch:20},{wch:14},{wch:28},{wch:16},{wch:12},{wch:12},{wch:28},{wch:12},{wch:22},{wch:40}];
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, "獎項分配結果");
+      const date = new Date().toLocaleDateString("sv-SE");
+      XLSX.writeFile(book, `HakkaGO_獎項分配結果_${date}.xlsx`);
+    }
+
+    function clearResults() {
+      results = []; drawTime = ""; batchId = "";
+      $("resultCard").hidden = true;
+      $("drawBtn").textContent = "開始分配獎項";
+      setStep(2);
+    }
+
+    function recordingMimeType() {
+      const types = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+      return types.find(type => MediaRecorder.isTypeSupported(type)) || "";
+    }
+
+    function updateRecordingClock() {
+      const seconds = Math.floor((Date.now() - recordingStartedAt) / 1000);
+      const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
+      const remain = String(seconds % 60).padStart(2, "0");
+      $("recordStatus").textContent = `錄影中 ${minutes}:${remain}`;
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices?.getDisplayMedia || !window.MediaRecorder) {
+        alert("這個瀏覽器不支援畫面錄影，請改用最新版 Chrome 或 Edge。");
+        return;
+      }
+      try {
+        recordingStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: { ideal: 30, max: 30 } },
+          audio: true,
+          preferCurrentTab: true
+        });
+        recordingChunks = [];
+        const mimeType = recordingMimeType();
+        mediaRecorder = new MediaRecorder(recordingStream, mimeType ? { mimeType } : undefined);
+        mediaRecorder.addEventListener("dataavailable", event => {
+          if (event.data.size) recordingChunks.push(event.data);
+        });
+        mediaRecorder.addEventListener("stop", downloadRecording);
+        recordingStream.getVideoTracks()[0].addEventListener("ended", stopRecording);
+        mediaRecorder.start(1000);
+        recordingStartedAt = Date.now();
+        updateRecordingClock();
+        recordingTimer = setInterval(updateRecordingClock, 1000);
+        $("recordDot").classList.add("live");
+        $("recordBtn").disabled = true;
+        $("stopRecordBtn").disabled = false;
+      } catch (error) {
+        if (error.name !== "NotAllowedError") alert("無法開始錄影，請重新選擇目前分頁。");
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder?.state === "recording") mediaRecorder.stop();
+      if (recordingTimer) clearInterval(recordingTimer);
+      recordingTimer = null;
+      recordingStream?.getTracks().forEach(track => track.stop());
+      $("recordDot").classList.remove("live");
+      $("recordStatus").textContent = "錄影完成，正在下載影片…";
+      $("recordBtn").disabled = false;
+      $("stopRecordBtn").disabled = true;
+    }
+
+    function downloadRecording() {
+      if (!recordingChunks.length) {
+        $("recordStatus").textContent = "沒有可下載的錄影內容";
+        return;
+      }
+      const blob = new Blob(recordingChunks, { type: mediaRecorder?.mimeType || "video/webm" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toLocaleString("sv-SE").replace(/[ :]/g, "-");
+      link.href = url;
+      link.download = `HakkaGO_抽獎錄影_${stamp}.webm`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      $("recordStatus").textContent = "錄影已下載，可再次開始錄影";
+      recordingChunks = [];
+    }
+
+    function setStep(n) {
+      [1,2,3].forEach(i => $(`step${i}`).classList.toggle("active", i === n));
+    }
+
+    fileInput.addEventListener("change", () => parseFile(fileInput.files[0]));
+    ["dragenter","dragover"].forEach(type => dropZone.addEventListener(type, e => { e.preventDefault(); dropZone.classList.add("drag"); }));
+    ["dragleave","drop"].forEach(type => dropZone.addEventListener(type, e => { e.preventDefault(); dropZone.classList.remove("drag"); }));
+    dropZone.addEventListener("drop", e => parseFile(e.dataTransfer.files[0]));
+    PRIZES.forEach(p => $(p.input).addEventListener("input", updateCounts));
+    $("drawMonth").addEventListener("change", applySelectedPlan);
+    $("drawBtn").addEventListener("click", draw);
+    $("exportBtn").addEventListener("click", exportExcel);
+    $("clearBtn").addEventListener("click", clearResults);
+    $("recordBtn").addEventListener("click", startRecording);
+    $("stopRecordBtn").addEventListener("click", stopRecording);
+    setupGiftPlans();
+  </script>
+</body>
+</html>
